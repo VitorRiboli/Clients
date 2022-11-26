@@ -3,14 +3,17 @@ package com.clientes.vitor.services;
 import com.clientes.vitor.dto.ClientDTO;
 import com.clientes.vitor.entities.Client;
 import com.clientes.vitor.repositories.ClientRepository;
+import com.clientes.vitor.services.exceptions.DatabaseException;
+import com.clientes.vitor.services.exceptions.ResourceNotFoundException;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class ClientService {
@@ -20,7 +23,8 @@ public class ClientService {
 
     @Transactional(readOnly = true)
     public ClientDTO findById(Long id) {
-        Client client = rep.findById(id).get();
+        Client client = rep.findById(id).orElseThrow(
+                () -> new ResourceNotFoundException("Cliente inexistente"));
         return new ClientDTO(client);
     }
 
@@ -40,15 +44,28 @@ public class ClientService {
 
     @Transactional
     public ClientDTO update(Long id, ClientDTO dto) {
-        Client entity = rep.getReferenceById(id);
-        copyDtoToEntity(dto, entity);
-        entity = rep.save(entity);
-        return new ClientDTO(entity);
+        try {
+            Client entity = rep.getReferenceById(id);
+            copyDtoToEntity(dto, entity);
+            entity = rep.save(entity);
+            return new ClientDTO(entity);
+        }
+        catch (EntityNotFoundException e) {
+            throw new ResourceNotFoundException("Cliente inexistente");
+        }
     }
 
     @Transactional(propagation = Propagation.SUPPORTS)
     public void delete(Long id) {
-        rep.deleteById(id);
+        try {
+            rep.deleteById(id);
+        }
+        catch (EmptyResultDataAccessException e) {
+            throw new ResourceNotFoundException("Cliente inexistente");
+        }
+        catch (DataIntegrityViolationException e) {
+            throw new DatabaseException("Falha de Integridade Referencial");
+        }
     }
 
     private void copyDtoToEntity(ClientDTO dto, Client entity) {
